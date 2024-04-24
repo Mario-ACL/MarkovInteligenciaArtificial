@@ -267,7 +267,7 @@ def gameplay(mapmap):
         temp_prob = gameplayer.engine.chance_action(gameplayer.engine.old_map, move, gameplayer.engine.map)
         probabilities.append(temp_prob)
         print(f"Probability: {temp_prob}")
-    print("-------------------------------nor")
+    print("-------------------------------")
     print(f"Final Score: {gameplayer.engine.reward_save}")
     print(f"Probabilities per move: {probabilities}")
 
