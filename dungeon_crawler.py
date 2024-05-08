@@ -1,71 +1,14 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Any, Iterable, Optional, Callable
-import random
+from typing import Iterable
 import copy
+from MDP import MDP
+
 
 State = any
 Action = any
 
 
-class MDP(ABC):
-    @abstractmethod
-    def state_test(self, state: State) -> Iterable[State]:
-        """
-        Generates all possible states
-        :return: Iterable[State]
-        """
-
-    @abstractmethod
-    def initial_state(self) -> State:
-        """
-        :return: Initial state
-        """
-
-    @abstractmethod
-    def actions(self, state: State) -> Iterable[Action]:
-        """
-        Generates all possible actions from given state
-        :return: Iterable[Action]
-        """
-
-    @abstractmethod
-    def chance_action(self, state: State, action: Action, new_state: State) -> float:
-        """
-        Chance to get to new_state from state if action is taken
-        :param state: Current state
-        :param action: Action to take
-        :param new_state: Goal state
-        :return: chance to get to new_state
-        """
-
-    @abstractmethod
-    def reward(self, state: State, action: Action, new_state: State) -> int:
-        """
-        Reward given if new_state is reached
-        :param state: Current state
-        :param action: Action to take
-        :param new_state: Goal state
-        :return: reward if reached new_state
-        """
-
-    @abstractmethod
-    def goal_test(self, state: State) -> bool:
-        """
-        Test if state is goal
-        :param state: Given state
-        :return: True if state is goal, False otherwise
-        """
-
-    @abstractmethod
-    def discount(self) -> int:
-        """
-        No idea
-        :return: number between 0 and 1
-        """
-
-
-# Notes: Los estados estan dados por el mapa
+# Notas: Los estados están dados por el mapa
 #         El mapa tiene 4 tipos de "tiles",
 #         0 = caminable,
 #         > or < 0 es meta,
@@ -97,6 +40,17 @@ class DungeonCrawler(MDP):
 
         self.reward_save = 0
 
+    # CREDITO COMPLETO A SANTY POR LA IMPLEMENTACION DE hash, eq, str
+    def __hash__(self):
+        return hash(tuple(map(tuple, self.map)))
+
+    def __eq__(self, other):
+        return (self.map == other.map and self.player_pos == other.player_pos
+                and self.goal_pos_dict == other.goal_pos_dict)
+
+    def __str__(self):
+        return str(self.map)
+
     def state_test(self, state: State) -> Iterable[State]:
         # yo le mando algo y reviso si es estado
         player = False
@@ -109,7 +63,7 @@ class DungeonCrawler(MDP):
                     continue
                 elif cell != 0:
                     goal = True
-                    # mas rapido salir del for
+                    # más rapido salir del for
                 if player and goal:
                     return state
 
@@ -123,9 +77,9 @@ class DungeonCrawler(MDP):
         return ["north", "south", "west", "east"]
 
     def chance_action(self, state: State, action: Action, new_state: State) -> float:
-        # direccion esperada = .8, lado no esperado = .1, lado no esperado contrario = .1
-        # no hay probabilidad de ir hacia atras por accidente
-        # Seccion MASOMENOS asistida por ChatGPT hasta el return 0.0:
+        # dirección esperada = .8, lado no esperado = .1, lado no esperado contrario = .1
+        # no hay probabilidad de ir hacia atrás por accidente
+        # Sección MASOMENOS asistida por ChatGPT hasta el return 0.1:
         # Determine the expected new position based on the action
         expected_chance = 0.8
         unexpected_chance = 0.1
@@ -168,7 +122,7 @@ class DungeonCrawler(MDP):
         return 0.1
 
     def reward(self, state: State, action: Action, new_state: State):
-        # si el nuevo estado tiene a el jugador en la meta entonces regresa el valor acorde
+        # si el nuevo estado tiene al jugador en la meta entonces regresa el valor acorde
         if self.player_pos in self.goal_pos_dict:
             self.reward_save = self.goal_pos_dict.get(self.player_pos)
 
@@ -177,15 +131,22 @@ class DungeonCrawler(MDP):
             return True
         return False
 
-    def discount(self) -> int:
+    def discount(self) -> float:
         return 1
 
 
 class Game:
     def __init__(self, initial_map: list):
-        self.engine = DungeonCrawler(initial_map)
+        self.engine = copy.deepcopy(DungeonCrawler(initial_map))
         self.player_pos = self.engine.player_pos
         self.old_player_pos = self.player_pos
+
+    # CREDITO COMPLETO A SANTY por la implementacion de hash, eq
+    def __hash__(self):
+        return hash(self.engine)
+
+    def __eq__(self, other):
+        return self.player_pos == other.player_pos
 
     def make_move(self, action: Action, chance: float) -> None:
         self.old_player_pos = self.player_pos
@@ -230,8 +191,10 @@ class Game:
                     self.player_pos = (self.player_pos[0] + 1, self.player_pos[1])
 
     def inbounds(self):
-        if self.player_pos is not None and self.player_pos[0] >= 0 and self.player_pos[1] >= 0 \
-                and self.player_pos[0] < 3 and self.player_pos[1] < 5 and self.engine.map[self.player_pos[0]][self.player_pos[1]] != "w":
+        if self.player_pos is not None and isinstance(self.engine.map, list) \
+                and 0 <= self.player_pos[0] < len(self.engine.map) \
+                and 0 <= self.player_pos[1] < len(self.engine.map[0]) \
+                and self.engine.map[self.player_pos[0]][self.player_pos[1]] != "w":
             return True
         return False
 
@@ -249,49 +212,3 @@ class Game:
     def print_board(self):
         print('\n'.join('\t'.join(map(str, row)) for row in self.engine.map))
 
-
-def gameplay(mapmap):
-    gameplayer = Game(mapmap)
-    probabilities = []
-    while not gameplayer.engine.goal_test(any):
-        gameplayer.print_board()
-        print(gameplayer.engine.actions(any))
-        move = input().lower()
-        if move == "exit":
-            break
-        if move not in gameplayer.engine.actions(any):
-            print("Invalid move")
-            continue
-        rand_val = random.random()
-        gameplayer.apply_move(move, rand_val)
-        temp_prob = gameplayer.engine.chance_action(gameplayer.engine.old_map, move, gameplayer.engine.map)
-        probabilities.append(temp_prob)
-        print(f"Probability: {temp_prob}")
-    print("-------------------------------")
-    print(f"Final Score: {gameplayer.engine.reward_save}")
-    print(f"Probabilities per move: {probabilities}")
-
-
-map1 = [[0, 0, 0, 1], [0, "w", 0, -1], ["p", 0, 0, 0]]
-gameplay(map1)
-
-
-# def run(MDP, pi):
-#     s = MDP.initial_state()
-#     rs = []
-#     while not MDP.goal_test(s):
-#         a = pi(s)
-#         s, r = MDP.next_state(MDP, s, a)
-#         rs.append(r)
-#     return rs
-#
-#
-# def next_state(MDP, s, a):
-#     dardo = random.random()
-#     cum_prob = 0
-#     for s, r, p in MDP.transitions(s, a):
-#         if dardo < cum_prob:
-#             return s, r
-#     raise ValueError(f"Something went wrong")
-#
-# MDP.transitions -> list [(s, r, p), (s, r, p), ...]
